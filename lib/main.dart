@@ -1,21 +1,21 @@
 import 'dart:io';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:tflite/tflite.dart';
 
 void main() {
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key});
+  const MyApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Fake Money Detection App',
+      title: 'Money Denomination Classifier',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
@@ -33,7 +33,20 @@ class ImagePickerPage extends StatefulWidget {
 
 class _ImagePickerPageState extends State<ImagePickerPage> {
   File? _image;
-  bool? _isReal;
+  String? _result;
+
+  @override
+  void initState() {
+    super.initState();
+    loadModel();
+  }
+
+  Future<void> loadModel() async {
+    await Tflite.loadModel(
+      model: "assets/final.tflite",
+      labels: "assets/labels.txt",
+    );
+  }
 
   Future<void> _pickImage(ImageSource source) async {
     try {
@@ -42,19 +55,24 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
       final imageTemp = File(pickedImage.path);
       setState(() {
         _image = imageTemp;
-        _isReal = null; // Reset the result when a new image is selected
+        _result = null; // Reset the result when a new image is selected
       });
     } catch (e) {
       print('Failed to pick image: $e');
     }
   }
 
-  void _checkImage() {
+  void _classifyImage() async {
     if (_image != null) {
-      // Randomly determine if the image is fake or real
-      final isReal = Random().nextBool();
+      var output = await Tflite.runModelOnImage(
+        path: _image!.path,
+        numResults: 1,
+        threshold: 0.5,
+        imageMean: 127.5,
+        imageStd: 127.5,
+      );
       setState(() {
-        _isReal = isReal;
+        _result = output != null && output.isNotEmpty ? output[0]["label"] : "Could not recognize";
       });
     }
   }
@@ -62,7 +80,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
   void _clearImage() {
     setState(() {
       _image = null;
-      _isReal = null;
+      _result = null;
     });
   }
 
@@ -70,7 +88,7 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Fake Money Detection"),
+        title: const Text("Money Denomination Classifier"),
       ),
       body: Center(
         child: Column(
@@ -105,15 +123,15 @@ class _ImagePickerPageState extends State<ImagePickerPage> {
               ),
               const SizedBox(height: 20),
               ElevatedButton(
-                onPressed: _checkImage,
-                child: const Text("Check"),
+                onPressed: _classifyImage,
+                child: const Text("Classify"),
               ),
-              if (_isReal != null) ...[
+              if (_result != null) ...[
                 const SizedBox(height: 20),
                 Text(
-                  _isReal! ? "Real Money" : "Fake Money",
+                  "Classification: $_result",
                   style: TextStyle(
-                    color: _isReal! ? Colors.green : Colors.red,
+                    color: Colors.blue,
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
