@@ -1,0 +1,2 @@
+real_money
+fake_money
